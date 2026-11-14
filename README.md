@@ -3,6 +3,9 @@
 </p>
 
 <p align="center">
+  <a href="https://mrigankad.github.io/Lectern/"><b>Website</b></a> ·
+  <a href="https://mrigankad.github.io/Lectern/docs/"><b>Docs</b></a> ·
+  <a href="https://github.com/mrigankad/Lectern/releases"><b>Releases</b></a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#screens">Screens</a> ·
   <a href="#integrations">Integrations</a> ·

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lectern docs</title>
+<meta name="description" content="Set up Lectern, connect models and media providers, drive it from Claude Code over MCP, and use the HTTP API." />
+<link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+<nav class="nav"><div class="wrap">
+  <a class="brand" href="../"><img src="../favicon.svg" width="30" height="30" alt="" />Lectern</a>
+  <div class="links">
+    <a class="hide-sm" href="../">Home</a>
+    <a href="./">Docs</a>
+    <a class="btn" href="https://github.com/mrigankad/Lectern">GitHub</a>
+  </div>
+</div></nav>
+
+<div class="wrap docs">
+<aside class="toc" aria-label="On this page">
+  <div class="g">Start</div>
+  <a href="#overview">Overview</a>
+  <a href="#quick-start">Quick start</a>
+  <a href="#connect">Connect a model</a>
+  <div class="g">Concepts</div>
+  <a href="#pipeline">How a deck is built</a>
+  <a href="#agents">The agents</a>
+  <a href="#scene-graph">Scene graph</a>
+  <a href="#critic">The Critic</a>
+  <a href="#undo">Undo</a>
+  <a href="#data">Data and charts</a>
+  <a href="#brand">Brand kits</a>
+  <a href="#media">Images and video</a>
+  <a href="#export">Export</a>
+  <div class="g">Reference</div>
+  <a href="#mcp">MCP server</a>
+  <a href="#api">HTTP API</a>
+  <a href="#events">Events</a>
+  <a href="#env">Environment</a>
+  <a href="#repo">Repository</a>
+  <a href="#status">Status</a>
+</aside>
+
+<main class="prose">
+<h1>Lectern docs</h1>
+<p>Everything you need to run Lectern, connect models, drive it from other agents and build on its API.</p>
+
+<h2 id="overview">Overview</h2>
+<p>Lectern turns a prompt, plus spreadsheets, documents and links, into a finished presentation. It has two parts that share one engine:</p>
+<ul>
+  <li><b><code>server/</code></b>: a FastAPI service with the agents, the layout engine, the Critic and the exporters. It stores everything in a local SQLite database.</li>
+  <li><b><code>web/</code></b>: a Next.js 15 app for the whole flow, from new deck to present mode.</li>
+</ul>
+<p>The same engine is also an MCP server, so Claude Code, Codex, Cursor or Antigravity can make decks without the web app.</p>
+
+<h2 id="quick-start">Quick start</h2>
+<p>You need Python 3.12+ with <a href="https://docs.astral.sh/uv/">uv</a>, and Node 20+ with pnpm.</p>
+<pre><code>git clone https://github.com/mrigankad/Lectern.git
+cd Lectern
+
+# 1. Backend · http://localhost:8000 (API docs at /docs)
+cd server
+uv sync
+uv run uvicorn lectern.main:app --port 8000
+
+# 2. Web app · http://localhost:3000 (in a second terminal)
+cd web
+pnpm install
+pnpm dev</code></pre>
+<p>Open <code>http://localhost:3000</code> and start a deck. With no keys, every agent uses the built-in <b>offline</b> provider: it writes a sensible deck from the prompt alone, with no network, so you can try the whole flow first.</p>
+<div class="note"><code>pnpm dev:mock</code> runs the web app on mock data with no backend at all, which is handy for UI work.</div>
+
+<h2 id="connect">Connect a model</h2>
+<p>Open <b>Connections and models</b> in the sidebar, add a key and press <b>Test</b>. Then pick a preset (Best quality, Balanced, Lowest cost) or choose a provider and model for each agent.</p>
+<table>
+  <tr><th>Provider</th><th>How it connects</th></tr>
+  <tr><td>Claude Code</td><td>Uses your local <code>claude</code> login. No API key needed.</td></tr>
+  <tr><td>Anthropic</td><td><code>ANTHROPIC_API_KEY</code> or a key saved in Connections.</td></tr>
+  <tr><td>OpenAI-compatible</td><td>OpenAI, OpenRouter, a LiteLLM gateway, Gemini, Groq, DeepSeek, Mistral and Ollama, all through one client with a base URL.</td></tr>
+  <tr><td>Offline</td><td>Deterministic, no network. The default, and what the tests use.</td></tr>
+</table>
+<p>Keys are stored in your local database and the API never returns them. A role whose provider has no key falls back to offline.</p>
+
+<h2 id="pipeline">How a deck is built</h2>
+<ol>
+  <li><b>Brief.</b> <code>POST /api/decks</code> with a prompt and optional audience, goal, length and sources.</li>
+  <li><b>Interview.</b> The Strategist asks only the questions the brief leaves open. If audience, goal and length are already set, it skips straight to the outline.</li>
+  <li><b>Outline.</b> You edit and reorder the headlines, then approve. Nothing is built before approval.</li>
+  <li><b>Build.</b> Slides are built three at a time: Writer, Art Director, Renderer, then Critic. You can pause and resume.</li>
+  <li><b>Review.</b> A slide with a high or medium finding goes back to the Writer once and is checked again.</li>
+  <li><b>Edit and export.</b> Ask for changes in chat, edit directly, then export.</li>
+</ol>
+<p>Every step is recorded as a run with a one-sentence summary, which feeds the live activity view.</p>
+
+<h2 id="agents">The agents</h2>
+<table>
+  <tr><th>Agent</th><th>What it does</th></tr>
+  <tr><td>Strategist</td><td>Runs the interview and drafts the storyline, with every headline written as a claim.</td></tr>
+  <tr><td>Analyst</td><td>Deterministic. Computes figures from real cells in your sources, so every number traces back to a cell.</td></tr>
+  <tr><td>Writer</td><td>Fills headlines, body text, chart labels and speaker notes. If the brief can't fill a slide, it writes what still needs finding out instead of template text.</td></tr>
+  <tr><td>Art Director</td><td>Chooses one of 21 layouts, the chart type and the visuals.</td></tr>
+  <tr><td>Renderer</td><td>Fits the content into the layout's slots on the canvas.</td></tr>
+  <tr><td>Critic</td><td>Deterministic lint over every slide (see below).</td></tr>
+  <tr><td>Editor</td><td>Applies chat requests to one slide or the whole deck.</td></tr>
+  <tr><td>Exporter</td><td>Writes PPTX, PDF, PNG and notes, plus an editability report.</td></tr>
+</table>
+<p>Your <b>rules</b> ("never use the word synergy", "always show currency in USD") are added to every agent prompt. A rule that bans a word is also enforced by the lint.</p>
+
+<h2 id="scene-graph">Scene graph</h2>
+<p>A slide is typed JSON: a layout id plus nodes (headline, text, bullets, stat, chart, table, image, quote). The placer turns it into a <code>RenderedSlide</code> on a 1920×1080 canvas. The web canvas, PowerPoint, PDF and PNG are all drawn from that one rendered form, so every format matches. The full schema is in <a href="https://github.com/mrigankad/Lectern/blob/main/docs/SPEC.md">docs/SPEC.md</a>.</p>
+
+<h2 id="critic">The Critic</h2>
+<p>The Critic runs without a model. Its rules:</p>
+<ul>
+  <li><b>Story:</b> long or topic-only headlines, missing notes, placeholder text left on a slide.</li>
+  <li><b>Design:</b> text overflow, text that is too small, more than five bullets, long bullets, low contrast, the wrong chart for the data.</li>
+  <li><b>Accuracy:</b> a number in the text or notes that differs from the slide's chart or stat value.</li>
+  <li><b>Your rules and brand:</b> banned words, brand colours, fonts and minimum sizes.</li>
+</ul>
+<p>Each slide starts at 100 and loses points by severity; the deck score is the mean, with Story, Design and Editability sub-scores. For each finding you can <b>Fix it</b>, or <b>Keep it</b>, which adds a rule so the Critic stops raising it.</p>
+
+<h2 id="undo">Undo</h2>
+<ul>
+  <li><b>Slide undo</b> takes back the latest change to a slide, whoever made it, one version at a time.</li>
+  <li><b>Ask undo</b> (under a chat reply) reverts exactly what that request changed. If you edited a field again afterwards, your later edit is kept.</li>
+</ul>
+<p>Removed slides are not restored yet.</p>
+
+<h2 id="data">Data and charts</h2>
+<p>Attach spreadsheets, CSVs, documents or links as sources. Charts and stats link to sheet ranges. <b>Refresh from sheet</b> re-reads them and also rewrites matching figures in headlines, text and notes; anything it can't trace to a single changed cell is flagged for you.</p>
+
+<h2 id="brand">Brand kits</h2>
+<p>Upload a <code>.potx</code> or <code>.pptx</code> (and optionally a brand PDF). Lectern reads the colour scheme, fonts, logos and layouts, builds a theme, and suggests rules the Critic checks. A branded deck's PowerPoint export is built on your template's master.</p>
+
+<h2 id="media">Images and video</h2>
+<table>
+  <tr><th>Provider</th><th>Setup</th></tr>
+  <tr><td>Higgsfield</td><td>Uses the Higgsfield CLI's own login. Test it under Connections to enable it. It bills credits.</td></tr>
+  <tr><td>Google Imagen and Veo</td><td><code>GEMINI_API_KEY</code></td></tr>
+  <tr><td>OpenAI Images</td><td><code>OPENAI_API_KEY</code></td></tr>
+  <tr><td>FLUX (fal.ai)</td><td><code>FAL_KEY</code></td></tr>
+  <tr><td>Runway</td><td><code>RUNWAYML_API_SECRET</code></td></tr>
+  <tr><td>Stock (Pexels)</td><td><code>PEXELS_API_KEY</code></td></tr>
+  <tr><td>Upload / offline</td><td>Built in. Offline draws flat placeholders in the deck colours.</td></tr>
+</table>
+
+<h2 id="export">Export</h2>
+<ul>
+  <li><b>PPTX:</b> native text boxes, tables and charts you can edit in PowerPoint, with speaker notes.</li>
+  <li><b>PDF:</b> vector, 960×540 pt pages, Urbanist embedded, optional notes pages.</li>
+  <li><b>Images:</b> a zip of 1920×1080 PNGs.</li>
+  <li><b>Notes:</b> a Markdown speaker script.</li>
+</ul>
+<p>Every export comes with a report that counts editable objects, charts, tables and pictures. Urbanist isn't embedded in PPTX files, so a machine without the font shows a fallback; the PDF always looks right.</p>
+
+<h2 id="mcp">MCP server</h2>
+<p>Lectern runs as an MCP server in two ways, on the same engine and database:</p>
+<ul>
+  <li><b>stdio:</b> <code>uv --directory /path/to/server run lectern-mcp</code>. The agent starts Lectern itself.</li>
+  <li><b>HTTP:</b> <code>http://localhost:8000/mcp</code>, served by the running API. Builds show live in the web app.</li>
+</ul>
+<h3>Claude Code</h3>
+<pre><code>claude mcp add lectern -- uv --directory "/path/to/Lectern/server" run lectern-mcp
+# or, with the API running
+claude mcp add --transport http lectern http://localhost:8000/mcp</code></pre>
+<h3>Claude desktop, Cursor, Gemini CLI, Antigravity</h3>
+<pre><code>{
+  "mcpServers": {
+    "lectern": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/Lectern/server", "run", "lectern-mcp"]
+    }
+  }
+}</code></pre>
+<h3>Codex</h3>
+<pre><code># ~/.codex/config.toml
+[mcp_servers.lectern]
+command = "uv"
+args = ["--directory", "/path/to/Lectern/server", "run", "lectern-mcp"]</code></pre>
+<p>The web app's <b>Claude Code and agents</b> page shows these with your machine's path filled in.</p>
+<h3>Tools</h3>
+<p><code>create_deck</code>, <code>get_interview</code>, <code>answer_interview</code>, <code>skip_interview</code>, <code>get_outline</code>, <code>update_outline</code>, <code>regenerate_outline</code>, <code>approve_outline</code>, <code>get_status</code>, <code>wait_until_ready</code>, <code>get_critic_report</code>, <code>fix_findings</code>, <code>ask</code>, <code>edit_slide</code>, <code>list_decks</code>, <code>export_deck</code>. Resources: <code>lectern://decks/{id}</code> and <code>lectern://decks/{id}/outline</code>.</p>
+<div class="note"><b>The outline stays a human decision.</b> <code>approve_outline</code> is never called automatically. Clients should show the outline and wait for a yes. The HTTP endpoint accepts localhost only and has no authentication, so keep the API on localhost.</div>
+
+<h2 id="api">HTTP API</h2>
+<p>All routes are under <code>/api</code> and return JSON. Errors are an HTTP status plus <code>{ "detail": "..." }</code> in plain language. Interactive docs are at <code>http://localhost:8000/docs</code>.</p>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+  <tr><td>GET</td><td><code>/health</code></td><td>Health and active provider</td></tr>
+  <tr><td>GET · POST</td><td><code>/decks</code></td><td>List decks · create one (starts the outline)</td></tr>
+  <tr><td>GET · PATCH · DELETE</td><td><code>/decks/{id}</code></td><td>Read, rename or set icon, delete</td></tr>
+  <tr><td>PUT</td><td><code>/decks/{id}/outline</code></td><td>Edit, reorder, add or remove outline slides</td></tr>
+  <tr><td>POST</td><td><code>/decks/{id}/outline/regenerate</code></td><td>Redraft, e.g. "make it shorter"</td></tr>
+  <tr><td>POST</td><td><code>/decks/{id}/approve</code> · <code>/pause</code> · <code>/resume</code></td><td>Start, pause or resume the build</td></tr>
+  <tr><td>GET</td><td><code>/decks/{id}/render</code></td><td>All rendered slides</td></tr>
+  <tr><td>PATCH</td><td><code>/decks/{id}/slides/{sid}</code></td><td>Manual edit, re-linted</td></tr>
+  <tr><td>POST</td><td><code>/decks/{id}/ask</code></td><td>A change in plain words, for a slide or the deck</td></tr>
+  <tr><td>POST</td><td><code>/decks/{id}/slides/{sid}/undo</code></td><td>Slide undo</td></tr>
+  <tr><td>POST</td><td><code>/decks/{id}/messages/{mid}/undo</code></td><td>Ask undo</td></tr>
+  <tr><td>GET</td><td><code>/decks/{id}/critic</code></td><td>Scores and findings</td></tr>
+  <tr><td>POST</td><td><code>/decks/{id}/critic/findings/{fid}</code> · <code>/critic/fix-all</code></td><td>Fix, keep or reopen findings</td></tr>
+  <tr><td>GET · POST · DELETE</td><td><code>/rules</code></td><td>Your standing rules</td></tr>
+  <tr><td>POST</td><td><code>/decks/{id}/export</code></td><td><code>pptx</code>, <code>pdf</code>, <code>images</code> or <code>notes</code></td></tr>
+  <tr><td>GET</td><td><code>/files/{file_id}</code></td><td>Download an export</td></tr>
+  <tr><td>GET</td><td><code>/layouts</code></td><td>The 21 layouts and their slots</td></tr>
+  <tr><td>GET · PUT</td><td><code>/settings/connections</code> · <code>/settings/routing</code></td><td>Providers, keys and model per agent</td></tr>
+  <tr><td>GET</td><td><code>/decks/{id}/events</code></td><td>Server-Sent Events</td></tr>
+</table>
+
+<h2 id="events">Events</h2>
+<p><code>GET /api/decks/{id}/events</code> streams Server-Sent Events: <code>deck.updated</code>, <code>outline.ready</code>, <code>slide.updated</code>, <code>run.updated</code> (one plain sentence per agent step), <code>message.updated</code>, <code>finding.updated</code>, and a <code>ping</code> every 20 seconds.</p>
+
+<h2 id="env">Environment</h2>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+  <tr><td><code>LECTERN_DATA_DIR</code></td><td><code>server/data</code></td><td>Database and exported files</td></tr>
+  <tr><td><code>LECTERN_OFFLINE_DELAY</code></td><td><code>0.6</code></td><td>Seconds per offline step, so the live build has something to show</td></tr>
+  <tr><td><code>LECTERN_CORS_ORIGINS</code></td><td><code>http://localhost:3000</code></td><td>Origins allowed to call the API</td></tr>
+  <tr><td><code>LECTERN_REFERENCES_DIR</code></td><td><code>../references</code></td><td>Layout and deck-type knowledge for the agents</td></tr>
+  <tr><td><code>LECTERN_FORCE_OFFLINE</code></td><td>unset</td><td><code>1</code> routes every agent to offline</td></tr>
+  <tr><td><code>LECTERN_WEB_URL</code>, <code>LECTERN_API_URL</code>, <code>LECTERN_MCP_URL</code></td><td>localhost</td><td>Links returned by MCP tools</td></tr>
+  <tr><td>Provider keys</td><td>unset</td><td><code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, <code>OPENROUTER_API_KEY</code>, <code>GEMINI_API_KEY</code> and others. A key saved in the app takes precedence.</td></tr>
+</table>
+
+<h2 id="repo">Repository</h2>
+<table>
+  <tr><th>Path</th><th>What it is</th></tr>
+  <tr><td><code>server/lectern/agents</code></td><td>Strategist, Writer, Art Director, Renderer, Critic, Editor and the pipeline</td></tr>
+  <tr><td><code>server/lectern/engine</code></td><td>Placement on the canvas and the lint rules</td></tr>
+  <tr><td><code>server/lectern/layouts</code></td><td>The 21 layouts and their slots</td></tr>
+  <tr><td><code>server/lectern/export</code></td><td>PPTX, PDF, images, notes and the editability report</td></tr>
+  <tr><td><code>server/lectern/llm</code>, <code>media</code></td><td>Model and media routers and providers</td></tr>
+  <tr><td><code>server/lectern/mcp</code></td><td>The MCP server</td></tr>
+  <tr><td><code>web/src</code></td><td>The Next.js app</td></tr>
+  <tr><td><code>docs/SPEC.md</code></td><td>The contract between backend and web app</td></tr>
+  <tr><td><code>references/</code></td><td>Layout, deck-type and visual-design knowledge</td></tr>
+</table>
+<p>Run the checks with <code>cd server &amp;&amp; uv run pytest</code> (offline) and <code>cd web &amp;&amp; pnpm typecheck &amp;&amp; pnpm lint</code>.</p>
+
+<h2 id="status">Status</h2>
+<p>Lectern is early. Built and tested: the full flow from brief to export, chat edits and undo, the Critic, data sources, brand kits, share links, present mode and the MCP server. Not built yet: invite by email, comments, Google Slides export, restoring removed slides, and accounts. Paid image providers are wired in but need your own keys or credits.</p>
+</main>
+</div>
+
+<footer><div class="wrap">
+  <span>Lectern</span>
+  <a href="../">Home</a>
+  <a href="https://github.com/mrigankad/Lectern">GitHub</a>
+  <a href="https://github.com/mrigankad/Lectern/issues">Report an issue</a>
+  <span>Fonts: Urbanist, SIL Open Font License</span>
+</div></footer>
+</body>
+</html>
