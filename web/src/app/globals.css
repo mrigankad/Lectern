@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+/* Design tokens: docs/SPEC.md section 8 (house product style). Change colours and radii here only. */
+:root {
+  --bg: #ffffff;
+  --surface: #f7f7f8;
+  --surface-2: #efeff2;
+  --line: #e8e8ec;
+  --line-strong: #d9d9e0;
+  --ink: #16181d;
+  --body: #5e6370;
+  --muted: #7a7f8c;
+  --action: #2563eb;
+  --action-soft: #eaf1ff;
+  --action-line: #bfd4ff;
+  /* Primary buttons and the product tile. */
+  --action-gradient: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  --action-gradient-hover: linear-gradient(180deg, #2f74ea 0%, #1a45c2 100%);
+  --pass: #16a06a;
+  --pass-soft: #e7f6ef;
+  --fail: #e5484d;
+  --fail-soft: #fdecec;
+  --warn: #b87400;
+  --warn-soft: #fff4dc;
+  --ai: #7c5cff;
+  --ai-ink: #5b3fd6;
+  --ai-soft: #f1edff;
+  --ai-line: #dcd3ff;
+  --teal: #0e8f8e;
+  --teal-soft: #e3f5f4;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-action: var(--action);
+  --color-action-line: var(--action-line);
+  --color-action-soft: var(--action-soft);
+  --color-pass: var(--pass);
+  --color-pass-soft: var(--pass-soft);
+  --color-fail: var(--fail);
+  --color-fail-soft: var(--fail-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-ai: var(--ai);
+  --color-ai-ink: var(--ai-ink);
+  --color-ai-soft: var(--ai-soft);
+  --color-ai-line: var(--ai-line);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  /* Radii: 6 chips, 8 buttons and inputs, 12 cards, pill. */
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-pill: 999px;
+  --font-sans: var(--font-urbanist), system-ui, sans-serif;
+  /* No monospace anywhere: code-like text uses the same family. */
+  --font-mono: var(--font-urbanist), system-ui, sans-serif;
+}
+
+/* Element defaults live in the base layer so Tailwind utilities can override them. */
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-urbanist), system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  select,
+  input,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  button:not(:disabled),
+  select:not(:disabled),
+  summary,
+  a {
+    cursor: pointer;
+  }
+
+  /* Text fields show focus on their own border instead. */
+  :focus-visible:not(input, textarea, select, [contenteditable]) {
+    outline: 2px solid var(--action-line);
+    outline-offset: 2px;
+  }
+  /* Mouse clicks never show a ring; only keyboard focus does. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  textarea,
+  input {
+    outline: none;
+  }
+}
+
+/* The one primary-button fill. */
+.btn-primary {
+  background-image: var(--action-gradient);
+  background-color: var(--action);
+  color: #ffffff;
+}
+.btn-primary:hover:not(:disabled) {
+  background-image: var(--action-gradient-hover);
+}
+
+/* Custom scrollbars everywhere: thin, rounded, quiet until hovered. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--line-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+/* Narrower variant for menus and rails. */
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  border-width: 2px;
+}
+
+/* Dropdown popover. */
+.dropdown-menu {
+  box-shadow: 0 8px 24px rgba(22, 24, 29, 0.1), 0 1px 3px rgba(22, 24, 29, 0.06);
+  animation: dropdown-in 120ms ease-out;
+}
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dropdown-menu {
+    animation: none;
+  }
+}
+
+/* Section label used in the sidebar and above groups. */
+.label {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@keyframes lectern-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: lectern-spin 1.2s linear infinite;
+}
+@keyframes lectern-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.pulse {
+  animation: lectern-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .pulse {
+    animation: none;
+  }
+}
+
+/* In-place slide text: a quiet outline on hover shows what can be edited. */
+.lectern-editable:hover,
+.lectern-editable:focus-visible {
+  outline: calc(var(--px) * 1.5) dashed var(--muted);
+  outline-offset: calc(var(--px) * 6);
+  border-radius: 0;
+}
